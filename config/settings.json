@@ -1,0 +1,6 @@
+{
+  "data_dir": "data",
+  "clip_seconds": 30,
+  "max_clips": 3,
+  "encoder": "auto"
+}

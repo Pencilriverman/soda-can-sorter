@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Instructions manual · YouTube Clip Studio</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 "Segoe UI",sans-serif;color:#f4f5f7;background:#111418}
+body{max-width:960px;margin:28px auto;padding:0 18px}
+header,nav,.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header{justify-content:space-between}h1,h2,h3{line-height:1.2}h1{margin:0}h3{margin:0 0 8px}
+a{color:#b8ee89}nav{margin:16px 0;gap:8px 16px}
+section{margin:24px 0;scroll-margin-top:12px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,265px),1fr));gap:12px;padding:0;list-style:none;counter-reset:steps}
+.steps>li{counter-increment:steps;background:#1d2229;border:1px solid #404a57;border-radius:10px;padding:14px}
+.steps>li::before{content:counter(steps);display:grid;place-items:center;width:28px;height:28px;margin-bottom:10px;border-radius:50%;background:#9dc9ff;color:#111418;font-weight:800}
+.steps p{margin:8px 0 0;color:#d5dde6}
+figure{margin:10px 0 0;padding:10px;background:#13171c;border:1px solid #414b58;border-radius:8px}
+.arrow{color:#ff616a;font-size:1.6rem;font-weight:900;line-height:1}
+.field,.control,.button{display:inline-block;border-radius:6px;padding:5px 8px;border:1px solid #687381;background:#292f38}
+.field{color:#c8d0db}.button{background:#b8ee89;color:#15200e;font-weight:700}.danger{color:#ffb9b9}
+dl{display:grid;grid-template-columns:minmax(120px,1fr) 3fr;gap:7px 14px;margin:0}dt{font-weight:700}dd{margin:0;color:#d5dde6}
+details{border:1px solid #404a57;border-radius:8px;padding:10px 14px;margin:8px 0;background:#1d2229}summary{cursor:pointer;font-weight:700}
+</style>
+<header><h1>Instructions manual</h1><a href="/">Back to Studio</a></header>
+<main>
+<section id="link"><h2>Make your first Short</h2>
+<ol class="steps">
+<li><h3>Paste a video link</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="field">Search YouTube or paste a video link</span></div></figure><p>Paste a YouTube link into the main field.</p></li>
+<li><h3>Choose what to make</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">Action <b>3</b></span><span class="control">AI Transcript <b>0</b></span></div></figure><p>Try Action at 3 and AI Transcript at 0 for a first run.</p></li>
+<li><h3>Generate and open the job</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="button">Generate Shorts</span></div></figure><p>Click Generate Shorts. When the job says Done, play a clip and click DOWNLOAD.</p></li>
+</ol></section>
+<h2>More ways to use Studio</h2>
+<details id="search"><summary>Find videos on YouTube</summary>
+<ol class="steps">
+<li><h3>Type a topic</h3><figure><div class="controls"><span class="field">GTA funny moments</span><span class="arrow" aria-hidden="true">➜</span><span class="button">Find videos</span></div></figure><p>Search options appear as you type. Set upload date, duration, and how many videos to find. Check Creative Commons only to filter by that license.</p></li>
+<li><h3>Pick the results</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">☑ Video thumbnail and title</span></div></figure><p>Check the videos to use. Set Clips per video and add AI direction if you want all selected videos to focus on a particular kind of moment.</p></li>
+<li><h3>Queue your picks</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="button">Queue selected</span></div></figure><p>Find it below Short design. It starts the jobs and clears the results. Cancel this search clears the results without queuing anything.</p></li>
+</ol></details>
+<details id="methods"><summary>Choose a clip method</summary>
+<dl>
+<dt>Most Replayed</dt><dd>Picks peaks in YouTube’s replay graph when available.</dd>
+<dt>Action</dt><dd>Picks moments with sustained movement.</dd>
+<dt>AI Transcript</dt><dd>Uses timed captions and your selected model to pick 15–150 second clips and write hooks, titles, and captions.</dd>
+<dt>AI Ranking</dt><dd>Enter 2–5 to make one animated countdown. Highlights can run up to 40 seconds each, within a three-minute export.</dd>
+<dt>Split into parts</dt><dd>Cuts the full video into three-minute parts and adds a part number to the hook.</dd>
+</dl><p>Clip counts are targets. Set a method to 0 to skip it.</p></details>
+<details id="ai"><summary>Set up AI Transcript or AI Ranking</summary>
+<ol class="steps">
+<li><h3>Open AI settings</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">AI settings</span></div></figure><p>Hover over AI settings in the header. Choose Local model, OpenAI, Anthropic, or Google.</p></li>
+<li><h3>Select the model</h3><figure><div class="controls"><span class="field">Model ID</span><span class="arrow" aria-hidden="true">➜</span><span class="control">List models</span></div></figure><p>For Bionic, start its API server and enter its local API URL. For a cloud provider, enter its API key. Click List models or type the exact model ID.</p></li>
+<li><h3>Tell AI what to look for</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="field">AI direction (optional)</span></div></figure><p>Try “close races with funny reactions.” Put game terms or names in Caption glossary to help Whisper spell them.</p></li>
+</ol><p>If the AI check fails, Studio can continue with other selected methods. With only AI methods selected, fix the connection or choose another method before queuing.</p></details>
+<details id="design"><summary>Set the look of your Shorts</summary>
+<ol class="steps">
+<li><h3>Open the editor</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">Short design · Edit design</span></div></figure><p>Start with a preset. Video placement and aspect ratio change how the source sits inside the vertical Short.</p></li>
+<li><h3>Style the text</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">Captions</span><span class="control">Font</span><span class="control">Opening hook</span></div></figure><p>Choose captions and font. Type a hook and press Enter for a line break. For AI Ranking, the hook can serve as the countdown title.</p></li>
+<li><h3>Adjust layers</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">+ Image or video</span><span class="control">+ Source video</span></div></figure><p>Select and unlock a layer to move it in the preview. Use Size to resize supported layers, and drag layer rows to reorder them. Name and save the design to reuse it.</p></li>
+</ol></details>
+<details id="jobs"><summary>Follow jobs and get your clips</summary>
+<ol class="steps">
+<li><h3>Watch progress</h3><figure><div class="controls"><span class="control">Running</span><span class="arrow" aria-hidden="true">➜</span><span class="control">Stop generating</span></div></figure><p>Jobs show the current stage and elapsed time. Stop generating requests a stop for active work. Use Retry on a failed or stopped job.</p></li>
+<li><h3>Download or delete</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">DOWNLOAD</span><span class="control danger">DELETE</span></div></figure><p>Play the clips under Done. Check clips for bulk actions. Leave Export metadata checked to also download a title and caption text file for each clip.</p></li>
+<li><h3>Change the look after export</h3><figure><div class="controls"><span class="arrow" aria-hidden="true">➜</span><span class="control">Re-render clips</span></div></figure><p>Open the editor from a finished job, change the design, and confirm the re-render. Studio reuses the source and saved picks.</p></li>
+</ol>
+<details><summary>Where are my files?</summary><p>Studio keeps jobs and downloads inside its portable folder. Delete job removes that job’s clips and any source Studio downloaded for it.</p></details>
+<details><summary>Studio is unavailable</summary><p>On the host PC, open Start.bat from the portable folder. Open Studio on port 57286 using the host PC’s LAN address if you’re on another device.</p></details>
+</details>
+</main>
+</html>

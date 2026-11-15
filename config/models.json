@@ -1,0 +1,6 @@
+{
+  "provider": "local",
+  "lm_studio": {"base_url": "http://127.0.0.1:1234/v1", "model": ""},
+  "ollama": {"base_url": "http://127.0.0.1:11434", "model": ""},
+  "openai_compatible": {"base_url": "", "model": "", "api_key_env": "AUTOCLIP_AI_API_KEY"}
+}
