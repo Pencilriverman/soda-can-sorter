@@ -1,15 +1,19 @@
-# GTA AutoClip Studio
+# YouTube Clip Studio
 
-Extract the ZIP to a writable directory on an x64 Windows 10/11 PC. Open `GTA-AutoClip.exe` or `Start.bat`. The launcher opens the dashboard on a loopback address. Enter a local video path or a YouTube URL and select **Generate Shorts**. The dashboard shows job status, previews, scores, and MP4 export links. Use **Stop Studio** or `Stop.bat` to shut down. A running job finishes before the process exits. Queued jobs interrupted by shutdown appear as failed on the next launch.
+Portable Windows app for turning long videos into vertical Shorts. Paste a link, search YouTube, or use a local video path. Studio supports Most Replayed, Action, AI Transcript, AI Ranking, and Split into parts.
 
-The offline analyzer ranks windows using scene changes and audio loudness. It renders letterboxed 720 × 1280 H.264 clips and JPEG thumbnails. This release uses heuristic ranking. GTA event recognition, model packages, and VRAM controls are pending. The optional providers in `config/models.json` can rerank selected windows through LM Studio, Ollama, or an OpenAI-compatible endpoint. Configure the model and URL before switching providers. External provider failures fall back to local scoring.
+## Test the portable build
 
-`config/settings.json` controls clip duration, maximum clips, encoder, and data directory. Relative storage paths resolve from the release folder. The default is `data`. Set the encoder to `cpu` to force software encoding. Automatic mode tries NVENC and falls back to x264 if encoding fails. NVENC requires a compatible NVIDIA GPU and driver. This release has no tested driver minimum. YouTube downloading requires network access and can fail when YouTube changes extraction requirements.
+1. Download the Windows ZIP from Releases and extract the whole folder to a writable location.
+2. Open `Start.bat`. Studio opens in your browser on port 57286.
+3. Open **Instructions manual** in Studio for the illustrated walkthrough. For a first run without an AI provider, set AI Transcript to 0 and try Action.
 
-For startup issues, inspect `startup-error.log` and `launcher.log` next to the executable. For processing failures, check the job error in the dashboard. Confirm the entire archive was extracted and that the folder is writable. Use an absolute path for a local input outside the release folder or a relative path for input stored inside it.
+The portable test build includes Python, FFmpeg, Node.js, and yt-dlp. AI Transcript and AI Ranking need timed captions and a configured language model. The optional Whisper model and CUDA bundle are separate from the test ZIP. Studio can use subtitle tracks when available.
 
-## Build and update
+Studio writes jobs and media into `data` inside the extracted folder. Use `Stop.bat` to shut it down. The launcher also listens on the local network. Use it on a trusted network and keep port 57286 off the public internet.
 
-Run `build.ps1 -PythonDir <python-directory> -MediaBin <binary-directory> -NodeDir <node-directory>` in PowerShell on the development PC. Supply the versions in DEPENDENCIES.md, including the license files. The build uses the Windows .NET Framework C# compiler and Windows tar. It produces a release directory and versioned ZIP under `dist`.
+## Build from source
 
-For a manual upgrade, stop Studio and wait for it to exit. Extract the new ZIP to a fresh directory. Copy your config, models, and data from the old folder. Keep the old folder intact for rollback. For external data, back up the database and data before starting the new version. SQLite uses schema versions and applies the initial migration at startup. A rollback should use the old data backup if a newer build has changed the schema.
+Run `build.ps1 -PythonDir <python-directory> -MediaBin <binary-directory> -NodeDir <node-directory>` in PowerShell on Windows. See [Dependencies](DEPENDENCIES.md) for the required versions and license files.
+
+If startup fails, check `startup-error.log` and `launcher.log` beside the executable. Keep your old folder when upgrading so you have a backup of the job database, presets, and media.
