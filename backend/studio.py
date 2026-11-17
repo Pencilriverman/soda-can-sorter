@@ -716,6 +716,7 @@ def process(job, source, counts, design, ai, cancel, original=None):
         url = urllib.parse.urlsplit(source)
         video_id = None
         caption_error = None
+        full_words = []
         if url.scheme in ('http', 'https') and url.hostname in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'):
             video_id = (url.path.strip('/') if url.hostname == 'youtu.be' else
                         urllib.parse.parse_qs(url.query).get('v', [url.path.rsplit('/', 1)[-1]])[0])
@@ -808,6 +809,23 @@ def process(job, source, counts, design, ai, cancel, original=None):
                 motion = [(float(t), float(s)) for t, s in re.findall(
                     r'pts_time:([\d.]+)\s*\n[^\n]*lavfi\.scd\.score=([\d.]+)', activity)]
             cues = transcript(video) if counts['transcript'] or counts['ai'] or counts.get('ranking_ai') or design['captions'] != 'off' else []
+            if not cues and (counts['ai'] or counts.get('ranking_ai')) and 'audio' in streams:
+                stat = video.stat()
+                source_identity = ['youtube', video_id] if video_id else [str(video.resolve()), stat.st_size, stat.st_mtime_ns]
+                glossary = design.get('glossary', '').strip()
+                try:
+                    full_words = cached_words(video, [source_identity, glossary] if glossary else source_identity,
+                                              [dict(start=0, duration=duration)], job, glossary)
+                    for start, end, tokens in full_words:
+                        if cues and len(cues[-1][2]) < 12 and start - cues[-1][1] < 1:
+                            left, _, previous = cues[-1]
+                            cues[-1] = (left, end, previous + tokens)
+                        else:
+                            cues.append((start, end, tokens))
+                    if cues:
+                        caption_error = None
+                except (ImportError, OSError, RuntimeError, ValueError) as error:
+                    caption_error = f'Whisper could not transcribe the source: {error}'
             captions = word_cues(video, cues) if design['captions'] != 'off' else []
             action_events = [(t, t + .25, min(100, value * 10)) for t, value in motion if value >= 1]
             transcript_events = [(start, end, min(100, 25 + len(set(words)) * 5))
@@ -916,7 +934,7 @@ def process(job, source, counts, design, ai, cancel, original=None):
             try:
                 glossary = design.get('glossary', '').strip()
                 caption_ranges = [part for item in selected for part in item.get('rank_segments', [item])]
-                captions = cached_words(video, [identity, glossary] if glossary else identity,
+                captions = full_words or cached_words(video, [identity, glossary] if glossary else identity,
                                         caption_ranges, job, glossary) or captions
             except (ImportError, OSError, RuntimeError, ValueError) as error:
                 warnings.append(f'Whisper captions unavailable. Used source captions where available. {error}')
