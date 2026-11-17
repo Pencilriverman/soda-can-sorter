@@ -9,4 +9,4 @@
 | .NET Framework | CLR v4, Windows inbox | Windows Forms launcher |
 | Browser | Windows default | Dashboard |
 
-The backend imports only the Python standard library. The frontend has no third-party packages. Licenses supplied with the binary inputs are copied into their respective runtime directories. The release includes SHA-256 hashes for every runtime file. Rebuilds require matching input versions and can be compared against that inventory.
+The Python runtime for a build must include faster-whisper and its dependencies in `Lib/site-packages`. On first launch, Studio downloads the CTranslate2 Whisper Large v3 weights and, on NVIDIA PCs, the Windows cuBLAS 12 and cuDNN 9 libraries. The setup script checks the SHA-256 hashes before installing them inside the portable folder.

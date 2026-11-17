@@ -8,6 +8,12 @@ if not exist "GTA-AutoClip.exe" (
     pause
     exit /b 1
 )
+"runtime\python\python.exe" -I -B "runtime\backend\setup_transcription.py"
+if errorlevel 1 (
+    echo Transcription setup failed. Check your internet connection and run Start.bat again.
+    pause
+    exit /b 1
+)
 start "" /wait /d "%CD%\." "%CD%\GTA-AutoClip.exe" %*
 if errorlevel 1 (
     echo Studio could not start. Check startup-error.log and launcher.log in this folder.

@@ -31,7 +31,9 @@ foreach ($name in 'ffmpeg.exe','ffprobe.exe','ffmpeg-license.txt') { Copy-Item -
 foreach ($name in 'yt-dlp.exe','yt-dlp-LICENSE.txt') { Copy-Item -LiteralPath (Join-Path $MediaBin $name) -Destination "$release/runtime/yt-dlp" }
 Copy-Item "$PSScriptRoot/config/*.json" "$release/config"
 foreach ($name in 'node.exe','LICENSE') { Copy-Item -LiteralPath (Join-Path $NodeDir $name) -Destination "$release/runtime/node" }
-Copy-Item "$PSScriptRoot/backend/studio.py" "$release/runtime/backend"
+Copy-Item "$PSScriptRoot/backend/studio.py","$PSScriptRoot/backend/setup_transcription.py" "$release/runtime/backend"
+if (-not (Test-Path "$PythonDir/Lib/site-packages/faster_whisper")) { throw 'Install faster-whisper into the supplied Python environment before building.' }
+Copy-Item "$PythonDir/Lib/site-packages" "$release/runtime/python/Lib" -Recurse
 Copy-Item "$PSScriptRoot/frontend/index.html" "$release/frontend/dist"
 Copy-Item "$PSScriptRoot/frontend/fonts" "$release/frontend/dist" -Recurse
 Copy-Item "$PSScriptRoot/frontend/manual*" "$release/frontend/dist"
