@@ -126,6 +126,7 @@ a.job-source:hover strong{text-decoration:underline}
 .clip-methods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;border-radius:8px;background:#252c35;padding:4px 0}
 header h1 small{font-size:.48em;font-weight:500;white-space:nowrap}
 .queue-note{display:block;margin-top:8px}
+.ai-settings label[hidden]{display:none}
 .batch-row label,.ai-settings label{display:grid;gap:5px}
 .batch-row input,.ai-settings input{box-sizing:border-box;width:100%;min-width:0}
 .video-source .batch-row label{height:100%;min-width:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr 38px;justify-content:stretch}
@@ -216,7 +217,7 @@ main figure>.clip-actions{margin-top:auto}
 .design-preview.snap-x.snap-y::after{background:linear-gradient(90deg,transparent calc(var(--guide-x,50%) - 1px),#b8ee89 calc(var(--guide-x,50%) - .5px),#b8ee89 calc(var(--guide-x,50%) + .5px),transparent calc(var(--guide-x,50%) + 1px)),linear-gradient(transparent calc(var(--guide-y,50%) - 1px),#b8ee89 var(--guide-y,50%),transparent calc(var(--guide-y,50%) + 1px))}
 </style>
 <header><h1>YouTube Clip Studio <small>by @pencilriverman</small></h1><nav class="header-tools" aria-label="Studio tools"><div class="settings-menu"><button type="button" class="settings-trigger">AI settings</button><div class="settings-panel ai-settings">
-<label>Provider <select id="ai-provider"><option value="local">Local model</option><option value="openai">OpenAI (GPT)</option><option value="claude">Anthropic (Claude)</option><option value="gemini">Google (Gemini)</option></select></label>
+<label>Provider <select id="ai-provider"><option value="local">Local model</option><option value="codex">Codex CLI</option><option value="openai">OpenAI (GPT)</option><option value="claude">Anthropic (Claude)</option><option value="gemini">Google (Gemini)</option></select></label>
 <label>API URL <input id="ai-url" value="http://127.0.0.1:1234/v1"></label>
 <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
 <label style="flex:1;min-width:min(180px,100%)">Model ID <input id="ai-model" list="ai-models" value="google/gemma-4-e4b"></label>
@@ -244,7 +245,7 @@ main figure>.clip-actions{margin-top:auto}
 <fieldset class="paste-options" id="paste-options" hidden>
 <legend class="step-title">Clip methods</legend>
 <div class="search-counts" id="paste-counts"></div>
-<label class="source-direction">AI direction (optional) <input id="paste-direction" maxlength="2000" placeholder="What should AI look for?"></label>
+<label class="source-direction">What should the clips be about? (optional) <input id="paste-direction" maxlength="2000" placeholder="&quot;USE ISHOWSPEED IN THE HOOK&quot; &quot;FIND FUNNY REACTS&quot;"></label>
 <div class="search-actions"><button type="button" id="add-source">Generate Shorts</button></div>
 </fieldset>
 <fieldset class="youtube-search" id="search-panel" aria-labelledby="search-heading" hidden>
@@ -260,7 +261,7 @@ main figure>.clip-actions{margin-top:auto}
 <fieldset class="search-clip-settings"><legend>Clips per video</legend>
 <div class="search-counts" id="search-counts"></div>
 </fieldset>
-<label class="source-direction">AI direction (optional) <input id="search-direction" maxlength="2000" placeholder="What should AI look for in these videos?"></label>
+<label class="source-direction">What should the clips be about? (optional) <input id="search-direction" maxlength="2000" placeholder="&quot;USE ISHOWSPEED IN THE HOOK&quot; &quot;FIND FUNNY REACTS&quot;"></label>
 </div>
 </fieldset>
 <fieldset class="video-source" aria-label="Video queue and generation">
@@ -340,7 +341,7 @@ function addSource() {
   directionInfo.textContent = 'ⓘ';
   directionInfo.dataset.tip = 'Tell AI Transcript what to look for in this video.';
   directionInfo.setAttribute('aria-label',directionInfo.dataset.tip);
-  directionTitle.append('AI direction (optional)',directionInfo);
+  directionTitle.append('What should the clips be about? (optional)',directionInfo);
   directionLabel.append(directionTitle);
   const direction = Object.assign(document.createElement('input'),{
     className:'video-direction',maxLength:500,placeholder:'e.g. Warcraft PvP — close wins'
@@ -931,9 +932,9 @@ async function checkAIForQueue(sources, ai) {
   if (!sources.some(({counts}) => counts.ai > 0 || counts.ranking_ai > 0)) return sources;
   let problem;
   try {
-    if (!ai.model) throw new Error('Choose a model in AI settings.');
-    if (ai.provider === 'local') {
-      notice.textContent = 'Checking that the local model can reply…';
+    if (ai.provider !== 'codex' && !ai.model) throw new Error('Choose a model in AI settings.');
+    if (['local','codex'].includes(ai.provider)) {
+      notice.textContent = ai.provider === 'codex' ? 'Checking Codex sign-in…' : 'Checking that the local model can reply…';
       try { await post('/api/ai/check',ai); }
       finally { notice.textContent = ''; }
     } else {
@@ -956,6 +957,9 @@ async function checkAIForQueue(sources, ai) {
 }
 document.querySelector('#ai-provider').onchange = event => {
   const local = event.target.value === 'local';
+  const codex = event.target.value === 'codex';
+  for (const id of ['ai-key','ai-model']) document.getElementById(id).closest('label').hidden = codex;
+  document.querySelector('#load-models').hidden = codex;
   document.querySelector('#ai-url').closest('label').hidden = !local;
   document.querySelector('#ai-url').closest('label').style.display = local ? '' : 'none';
   document.querySelector('#ai-key').value = '';
@@ -963,6 +967,7 @@ document.querySelector('#ai-provider').onchange = event => {
   document.querySelector('#ai-models').replaceChildren();
   document.querySelector('#ai-model-picker').style.display = 'none';
   document.querySelector('#ai-provider-note').textContent = local ? 'A key is optional for local models.'
+    : codex ? 'Install Codex CLI and run codex login on this PC. Open Studio on localhost. Transcript text is sent to Codex.'
     : 'Uses a provider API key. Caption text is sent to the provider and API charges may apply.';
 };
 document.querySelector('#load-models').onclick = async event => {
@@ -1353,8 +1358,8 @@ for (const [selector,message] of Object.entries({
 })) addInfo(document.querySelector(selector),message,!selector.endsWith('.settings-trigger'));
 for (const id of ['paste-direction','search-direction']) {
   const input = document.getElementById(id);
-  const caption = element('span','AI direction (optional)');
-  addInfo(caption,'Tell AI Transcript what to look for.');
+  const caption = element('span','What should the clips be about? (optional)');
+  addInfo(caption,'Example: Find funny reactions and use “IShowSpeed” in the hook.');
   input.parentElement.replaceChildren(caption,input);
 }
 function addSearchRow() {
