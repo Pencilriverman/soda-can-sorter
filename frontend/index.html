@@ -196,6 +196,8 @@ main figure>.clip-actions{margin-top:auto}
 #layer-list{display:grid;gap:5px;max-height:315px;overflow:auto;margin:8px 0}
 #layer-controls label{font-size:.75rem;padding:5px;background:none}
 #layer-controls input{min-width:0;padding:0}
+#layer-play-once-option[hidden],#layer-green-screen-option[hidden],#layer-mute-option[hidden],#layer-pause-option[hidden]{display:none}
+#layer-timing input[type=checkbox]{width:16px;accent-color:#b8ee89}
 #split-frame,#split-second{position:absolute;left:0;width:100%;height:50%}
 #layer-media{position:absolute;inset:0;pointer-events:none}
 #layer-media img,#layer-media video{position:absolute;inset:auto;height:auto;aspect-ratio:auto;max-width:none;transform:translate(-50%,-50%);background:transparent}
@@ -217,7 +219,7 @@ main figure>.clip-actions{margin-top:auto}
 <label>Provider <select id="ai-provider"><option value="local">Local model</option><option value="openai">OpenAI (GPT)</option><option value="claude">Anthropic (Claude)</option><option value="gemini">Google (Gemini)</option></select></label>
 <label>API URL <input id="ai-url" value="http://127.0.0.1:1234/v1"></label>
 <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
-<label style="flex:1;min-width:min(180px,100%)">Model ID <input id="ai-model" list="ai-models" value="gemma-4-12b-it-qat"></label>
+<label style="flex:1;min-width:min(180px,100%)">Model ID <input id="ai-model" list="ai-models" value="google/gemma-4-e4b"></label>
 <button type="button" id="load-models" style="background:transparent;color:#c5cbd3;font-size:.8rem;padding:6px 9px;margin-bottom:5px">List models</button>
 </div>
 <datalist id="ai-models"></datalist>
@@ -285,7 +287,7 @@ main figure>.clip-actions{margin-top:auto}
 <div id="sample-hook" class="sample-text"><span></span></div>
 <div id="sample-caption" class="sample-text"><span>We need to keep moving.</span></div>
 </div>
-<aside class="layer-panel"><button type="button" id="add-layer">+ Image or video</button><button type="button" id="add-instance">+ Source video</button><input type="file" id="layer-file" accept=".png,.jpg,.jpeg,.webp,.mp4,.webm" hidden><div id="layer-list" aria-label="Overlay layers, front to back"></div><div id="layer-controls" hidden><label>Size <input type="range" data-layer="size" min="5" max="100"></label><div id="layer-timing"><label>Start (seconds) <input id="layer-start" type="number" min="0" max="180" step="0.1" value="0"></label><label>End (seconds) <input id="layer-end" type="number" min="0.1" max="180" step="0.1" placeholder="Clip end"></label></div><button type="button" id="layer-remove" class="delete">Remove layer</button></div></aside></div>
+<aside class="layer-panel"><button type="button" id="add-layer">+ Image or video</button><button type="button" id="add-folder">+ Video folder</button><input type="file" id="layer-folder" webkitdirectory multiple hidden><button type="button" id="add-instance">+ Source video</button><input type="file" id="layer-file" accept=".png,.jpg,.jpeg,.webp,.mp4,.webm" hidden><div id="layer-list" aria-label="Overlay layers, front to back"></div><div id="layer-controls" hidden><label>Size <input type="range" data-layer="size" min="5" max="100"></label><div id="layer-timing"><label id="layer-pause-option">Pause main video 2s <input id="layer-pause_main" type="checkbox"></label><label>First 4 seconds <input id="layer-first_four" type="checkbox"></label><label id="layer-play-once-option">Play once <input id="layer-play_once" type="checkbox"></label><label id="layer-green-screen-option">Remove green screen <input id="layer-green_screen" type="checkbox"></label><label id="layer-mute-option">Mute video <input id="layer-mute" type="checkbox"></label><label>Start (seconds) <input id="layer-start" type="number" min="0" max="180" step="0.1" value="0"></label><label>End (seconds) <input id="layer-end" type="number" min="0.1" max="180" step="0.1" placeholder="Clip end"></label></div><button type="button" id="layer-remove" class="delete">Remove layer</button></div></aside></div>
 </fieldset></details>
 <div class="generate-area">
 <p id="rerender-note" hidden>Re-rendering saved clips with the updated design. The source download and clip selection are reused.</p>
@@ -528,10 +530,19 @@ function highlightLayer(index) {
   size.min = main ? 50 : 5;
   size.max = main || layer?.file === 'source' ? 250 : 100;
   document.querySelector('#layer-timing').hidden = !layer;
+  document.querySelector('#layer-play-once-option').hidden = !/\.(mp4|webm)$/i.test(layer?.file || '');
+  document.querySelector('#layer-green-screen-option').hidden = document.querySelector('#layer-play-once-option').hidden;
+  document.querySelector('#layer-mute-option').hidden = document.querySelector('#layer-play-once-option').hidden;
+  document.querySelector('#layer-pause-option').hidden = !layer || layer.file === 'source';
+  for (const key of ['first_four','play_once','green_screen','mute','pause_main']) {
+    const checkbox = document.querySelector('#layer-' + key);
+    checkbox.checked = Boolean(layer?.[key]);
+    checkbox.disabled = Boolean(layer?.locked);
+  }
   for (const key of ['start','end']) {
     const input = document.querySelector('#layer-' + key);
     input.value = layer?.[key] ?? (key === 'start' ? 0 : '');
-    input.disabled = Boolean(layer?.locked);
+    input.disabled = Boolean(layer?.locked || layer?.first_four);
   }
   size.value = index === -3 ? second.zoom : main ? zoom.value : layer?.size ?? 35;
   size.disabled = index === -3 ? second.locked : main ? mainLocked : Boolean(layer?.locked);
@@ -570,7 +581,7 @@ function drawLayers() {
   layerList.replaceChildren(...layers.map((layer,index) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = layer.file === 'source' ? 'Source video ' + (index+1) : (/\.(mp4|webm)$/.test(layer.file) ? 'Video' : 'Image') + ' ' + (index+1);
+    button.textContent = layer.video_pool ? 'Video folder (' + layer.video_pool.length + ')' : layer.file === 'source' ? 'Source video ' + (index+1) : (/\.(mp4|webm)$/.test(layer.file) ? 'Video' : 'Image') + ' ' + (index+1);
     button.setAttribute('aria-pressed',index===selectedLayer);
     button.className = 'layer-card';
     button.dataset.index = index;
@@ -622,6 +633,15 @@ document.querySelector('#layer-remove').onclick = () => {
   selectedLayer = Math.min(selectedLayer,layers.length-1);
   drawLayers();
 };
+for (const key of ['first_four','play_once','green_screen','mute','pause_main']) {
+  document.querySelector('#layer-' + key).onchange = event => {
+    const layer = layers[selectedLayer];
+    if (!layer || layer.locked) return;
+    rememberLayers();
+    layer[key] = event.target.checked;
+    highlightLayer(selectedLayer);
+  };
+}
 for (const key of ['start','end']) {
   const input = document.querySelector('#layer-' + key);
   input.onchange = () => {
@@ -646,20 +666,45 @@ document.querySelector('#add-instance').onclick = () => {
   drawLayers();
 };
 document.querySelector('#add-layer').onclick = () => layerFile.click();
-layerFile.onchange = async () => {
-  const file = layerFile.files[0];
-  layerFile.value = '';
-  if (!file) return;
+const layerFolder = document.querySelector('#layer-folder');
+document.querySelector('#add-folder').onclick = () => layerFolder.click();
+async function importOverlay(files, folder = false) {
+  if (!files.length) {
+    if (folder) notice.textContent = 'This folder has no MP4 or WebM videos.';
+    return;
+  }
   if (layers.length >= 8) { notice.textContent = 'Use up to 8 overlays.'; return; }
-  const ext = file.name.split('.').pop().toLowerCase().replace(/^jpeg$/,'jpg');
+  const buttons = ['add-layer','add-folder','add-instance'].map(id => document.getElementById(id));
+  buttons.forEach(button => { button.disabled = true; });
   try {
-    const response = await fetch('/api/assets/'+ext,{method:'POST',headers:{'X-Studio-Token':await token},body:file});
-    const data = await response.json();
-    if (!response.ok) throw Error(data.error || 'Could not add overlay.');
+    const uploaded = [];
+    for (const file of files) {
+      if (folder) notice.textContent = 'Importing overlay video ' + (uploaded.length + 1) + ' of ' + files.length + '…';
+      const ext = file.name.split('.').pop().toLowerCase().replace(/^jpeg$/,'jpg');
+      const response = await fetch('/api/assets/'+ext,{method:'POST',headers:{'X-Studio-Token':await token},body:file});
+      const data = await response.json();
+      if (!response.ok) throw Error(file.name + ' — ' + (data.error || 'Could not add overlay.'));
+      uploaded.push(data.file);
+    }
     rememberLayers();
-    selectedLayer = layers.push({file:data.file,size:35,x:50,y:50})-1;
+    const layer = {file:uploaded[0],size:35,x:50,y:50};
+    if (folder) layer.video_pool = uploaded;
+    selectedLayer = layers.push(layer)-1;
     drawLayers();
+    notice.textContent = '';
   } catch(error) { notice.textContent = error.message; }
+  finally { buttons.forEach(button => { button.disabled = false; }); }
+}
+layerFile.onchange = () => {
+  const files = [...layerFile.files];
+  layerFile.value = '';
+  void importOverlay(files);
+};
+layerFolder.onchange = () => {
+  const files = [...layerFolder.files].filter(file => /\.(mp4|webm)$/i.test(file.name))
+    .sort((a,b) => a.webkitRelativePath.localeCompare(b.webkitRelativePath));
+  layerFolder.value = '';
+  void importOverlay(files,true);
 };
 const frame = document.querySelector('#sample-frame');
 const hookStyle = document.querySelector('#hook-style');
@@ -914,7 +959,7 @@ document.querySelector('#ai-provider').onchange = event => {
   document.querySelector('#ai-url').closest('label').hidden = !local;
   document.querySelector('#ai-url').closest('label').style.display = local ? '' : 'none';
   document.querySelector('#ai-key').value = '';
-  document.querySelector('#ai-model').value = local ? 'gemma-4-12b-it-qat' : '';
+  document.querySelector('#ai-model').value = local ? 'google/gemma-4-e4b' : '';
   document.querySelector('#ai-models').replaceChildren();
   document.querySelector('#ai-model-picker').style.display = 'none';
   document.querySelector('#ai-provider-note').textContent = local ? 'A key is optional for local models.'

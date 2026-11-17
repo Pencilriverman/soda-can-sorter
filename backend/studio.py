@@ -21,6 +21,7 @@ from datetime import datetime, timezone, timedelta
 import msvcrt
 import hashlib
 import math
+import random
 import shutil
 import zipfile
 
@@ -51,7 +52,7 @@ HOOK_STYLES = {
 COUNT_DEFAULTS = dict(replay=0, action=0, transcript=0, ai=0, chop=0, ranking_action=0, ranking_ai=0)
 RANKING_CLIP_MAX = 40
 RANKING_TOTAL_MAX = 180
-AI_DEFAULTS = dict(provider='local', url='http://127.0.0.1:1234/v1', model='gemma-4-12b-it-qat', key='', direction='')
+AI_DEFAULTS = dict(provider='local', url='http://127.0.0.1:1234/v1', model='google/gemma-4-e4b', key='', direction='')
 AI_ENDPOINTS = {'openai': 'https://api.openai.com/v1', 'claude': 'https://api.anthropic.com/v1',
                 'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai'}
 
@@ -922,12 +923,30 @@ def process(job, source, counts, design, ai, cancel, original=None):
         offset = max((int(path.stem.rsplit('-', 1)[-1])
                       for path in (DATA / 'clips').glob(f'{job}-*.mp4')
                       if path.stem.rsplit('-', 1)[-1].isdigit()), default=0) if original else 0
+        layer_orders = []
+        for layer in design.get('layers', []):
+            files = list(layer.get('video_pool', [layer['file']]))
+            random.Random(job + ':'.join(files)).shuffle(files)
+            layer_orders.append((layer, files))
+        audio_by_asset = {}
+
         def render_segment(candidate, name, clip):
             nonlocal encoder
+            pause_at = min((0 if layer.get('first_four') else layer.get('start', 0)
+                            for layer in render_layers if layer.get('pause_main')
+                            and layer['file'] != 'source'), default=None)
+            if pause_at is not None and pause_at >= candidate['duration']:
+                pause_at = None
+            if pause_at is not None:
+                pause_at = round(pause_at * 30) / 30
+            output_duration = candidate['duration'] + (2 if pause_at is not None else 0)
             clip_captions = [(max(0, first - candidate['start']), last - candidate['start'], words)
                              for first, last, words in captions
                              if last > candidate['start'] and first < candidate['start'] + candidate['duration']]
-            overlay = overlay_file(name, dict(candidate, start=0), clip_captions, design['captions'],
+            if pause_at is not None:
+                clip_captions = [(left, min(right, pause_at), words) for left, right, words in clip_captions if left < pause_at] + [
+                    (max(left, pause_at) + 2, right + 2, words) for left, right, words in clip_captions if right > pause_at]
+            overlay = overlay_file(name, dict(candidate, start=0, duration=output_duration), clip_captions, design['captions'],
                                    candidate.get('hook', design['hook']), design['hook_style'], design['hook_width'],
                                    design['ratio'], design['font'], ai_hook=candidate['method'] == 'ai',
                                    hook_y=design['hook_y'], caption_y=design['caption_y'])
@@ -947,25 +966,66 @@ def process(job, source, counts, design, ai, cancel, original=None):
                     '-vf', filters,
                     '-map', '0:v:0', '-map', '0:a:0?', '-pix_fmt', 'yuv420p',
                     '-c:a', 'aac', '-movflags', '+faststart', '-c:v']
-            if design.get('layers'):
-                inputs, chain = [], ['[0:v]' + video_filters(design) + '[base0]']
-                for i, layer in enumerate(design['layers'], 1):
+            if render_layers:
+                freeze = ''
+                if pause_at == 0:
+                    freeze = 'fps=30,tpad=start=60:start_mode=clone,'
+                elif pause_at is not None:
+                    freeze = f'fps=30,loop=loop=60:size=1:start={round(pause_at * 30)},settb=1/30,setpts=N,'
+                inputs, chain = [], ['[0:v]' + freeze + video_filters(design) + '[base0]']
+                audio_inputs = ['[0:a:0]'] if 'audio' in streams else []
+                if pause_at is not None and audio_inputs:
+                    if pause_at == 0:
+                        chain.append('[0:a:0]adelay=2000:all=1[paused]')
+                    else:
+                        chain.extend(('[0:a:0]asplit[before][after]',
+                                      f'[before]atrim=end={pause_at},asetpts=PTS-STARTPTS,apad=pad_dur=2[hold]',
+                                      f'[after]atrim=start={pause_at},asetpts=PTS-STARTPTS[resume]',
+                                      '[hold][resume]concat=n=2:v=0:a=1[paused]'))
+                    audio_inputs = ['[paused]']
+                for i, layer in enumerate(render_layers, 1):
                     source_layer = layer['file'] == 'source'
                     asset = video if source_layer else DATA / 'assets' / layer['file']
+                    uploaded_video = not source_layer and asset.suffix in ('.mp4', '.webm')
+                    play_once = uploaded_video and layer.get('play_once', False)
+                    start, end = layer.get('start', 0), layer.get('end')
+                    if layer.get('first_four'):
+                        start, end = 0, 4
                     if source_layer:
                         inputs += ['-ss', candidate['start']]
-                    elif asset.suffix in ('.mp4', '.webm'):
+                    elif uploaded_video and not play_once:
                         inputs += ['-stream_loop', '-1']
                     inputs += ['-i', asset]
-                    chain.append(f'[{i}:v]scale={round(1080 * layer["size"] / 100)}:-1,format=rgba[media{i}]')
-                    start, end = layer.get('start', 0), layer.get('end')
+                    delay = f',setpts=PTS-STARTPTS+{start}/TB' if uploaded_video else ''
+                    layer_freeze = freeze if source_layer else ''
+                    key = 'format=yuva444p,chromakey=0x00FF00:0.31:0.04' if uploaded_video and layer.get('green_screen') else 'format=rgba'
+                    chain.append(f'[{i}:v]{layer_freeze}scale={round(1080 * layer["size"] / 100)}:-1,{key}{delay}[media{i}]')
+                    if layer['file'] in audible_assets and not layer.get('mute', False) and start < output_duration:
+                        length = min(end if end is not None else output_duration, output_duration) - start
+                        chain.append(f'[{i}:a:0]atrim=duration={length},asetpts=PTS-STARTPTS,'
+                                     f'adelay={round(start * 1000)}:all=1[layeraudio{i}]')
+                        audio_inputs.append(f'[layeraudio{i}]')
                     enabled = f'gte(t,{start})' if end is None else f'gte(t,{start})*lt(t,{end})'
+                    eof = ':eof_action=pass:repeatlast=0' if play_once else ''
                     chain.append(f'[base{i-1}][media{i}]overlay={layer["x"]}*W/100-w/2:'
-                                 f'{layer["y"]}*H/100-h/2:enable=\'{enabled}\'[base{i}]')
+                                 f'{layer["y"]}*H/100-h/2:enable=\'{enabled}\'{eof}[base{i}]')
                 chain.append(f'[base{i}]{text_filter}[out]')
-                args = args[:6] + inputs + ['-t', candidate['duration'], '-filter_complex', ';'.join(chain),
+                audio_map = '0:a:0?'
+                if audio_inputs and audio_inputs != ['[0:a:0]']:
+                    mix = ''.join(audio_inputs) + f'amix=inputs={len(audio_inputs)}:duration=longest:normalize=0,apad'
+                    if design.get('normalize'):
+                        mix += ',loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000'
+                    else:
+                        mix += ',alimiter=limit=0.95'
+                    chain.append(mix + '[mixed]')
+                    audio_map = '[mixed]'
+                elif has_audio and not audio_inputs:
+                    chain.append('anullsrc=r=48000:cl=stereo[mixed]')
+                    audio_map = '[mixed]'
+                args = args[:6] + inputs + ['-t', output_duration, '-filter_complex', ';'.join(chain),
                                              '-map', '[out]'] + args[args.index('0:a:0?')-1:]
-            if design.get('normalize') and 'audio' in streams:
+                args[args.index('0:a:0?')] = audio_map
+            if design.get('normalize') and 'audio' in streams and '[mixed]' not in args:
                 args[-1:-1] = ['-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '48000']
             try:
                 try:
@@ -978,6 +1038,7 @@ def process(job, source, counts, design, ai, cancel, original=None):
             finally:
                 if overlay:
                     overlay.unlink(missing_ok=True)
+            return output_duration
 
         for index, candidate in enumerate(selected, 1):
             progress(job, 'Rendering Shorts', f'Clip {index} of {len(selected)}',
@@ -986,6 +1047,19 @@ def process(job, source, counts, design, ai, cancel, original=None):
             if completed and (DATA / 'clips' / completed['clip']).is_file() and (DATA / 'thumbnails' / completed['thumbnail']).is_file():
                 candidate.update(completed)
                 continue
+            render_layers = [dict(layer, file=files[(index - 1) % len(files)]) for layer, files in layer_orders]
+            audible_assets = set()
+            for layer in render_layers:
+                filename = layer['file']
+                if not filename.endswith(('.mp4', '.webm')) or layer.get('mute', False):
+                    continue
+                if filename not in audio_by_asset:
+                    audio, _ = run(PROBE, '-v', 'error', '-select_streams', 'a:0', '-show_entries',
+                                   'stream=index', '-of', 'csv=p=0', DATA / 'assets' / filename)
+                    audio_by_asset[filename] = bool(audio.strip())
+                if audio_by_asset[filename]:
+                    audible_assets.add(filename)
+            has_audio = 'audio' in streams or bool(audible_assets)
             name = f'{job}-{offset + index}'
             clip = DATA / 'clips' / (name + '.mp4')
             thumb = DATA / 'thumbnails' / (name + '.jpg')
@@ -1006,22 +1080,24 @@ def process(job, source, counts, design, ai, cancel, original=None):
                     folder = Path(temp)
                     manifest = folder / 'parts.txt'
                     files = []
+                    durations = []
                     for piece, item in enumerate(segments_to_render):
                         progress(job, 'Rendering ranking', f'Part {piece + 1} of {len(segments_to_render)}')
                         part = folder / f'part-{piece}.mp4'
-                        render_segment(item, f'{name}-rank-{piece}', part)
+                        durations.append(render_segment(item, f'{name}-rank-{piece}', part))
                         files.append(f"file '{part.name}'")
                     manifest.write_text('\n'.join(files) + '\n', encoding='ascii')
                     args = [FF, '-y', '-f', 'concat', '-safe', '1', '-i', manifest]
                     hits, position = [], 0
-                    for item in segments_to_render:
+                    for segment_duration in durations:
                         delta = f'(t-{position:.6f})'
                         hits.append(f'if(between({delta},0,0.24),0.25*sin(2*PI*85*{delta})*exp(-19*{delta}),0)')
-                        position += item['duration']
+                        position += segment_duration
+                    candidate['duration'] = min(RANKING_TOTAL_MAX, position)
                     tone = '+'.join(hits).replace(',', r'\,')
                     args += ['-f', 'lavfi', '-i', f'aevalsrc={tone}:s=48000:d={candidate["duration"]:.6f}', '-map', '0:v:0']
                     args += (['-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]', '-map', '[a]']
-                             if 'audio' in streams else ['-map', '1:a:0'])
+                             if has_audio else ['-map', '1:a:0'])
                     args += ['-c:v', 'copy', '-c:a', 'aac']
                     run(*args, '-t', RANKING_TOTAL_MAX, '-movflags', '+faststart', clip)
             else:
@@ -1453,6 +1529,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     or any(type(layer.get(key)) is not int or not low <= layer[key] <= (250 if key == 'size' and layer['file'] == 'source' else 100)
                            for key, low in (('x', 0), ('y', 0), ('size', 5)))
                     or type(layer.get('start', 0)) not in (int, float)
+                    or ('video_pool' in layer and (not isinstance(layer['video_pool'], list)
+                        or not layer['video_pool'] or layer['file'] != layer['video_pool'][0]
+                        or any(not isinstance(name, str) or not re.fullmatch(r'[a-f0-9]{32}\.(mp4|webm)', name)
+                               or not (DATA / 'assets' / name).is_file() for name in layer['video_pool'])))
+                    or any(type(layer.get(flag, False)) is not bool for flag in ('first_four', 'play_once', 'green_screen', 'mute', 'pause_main'))
                     or not 0 <= layer.get('start', 0) <= 180
                     or (layer.get('end') is not None and (
                         type(layer['end']) not in (int, float) or not layer.get('start', 0) < layer['end'] <= 180))
